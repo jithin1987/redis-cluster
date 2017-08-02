@@ -1,0 +1,13 @@
+---
+shared:
+  image: buildpack-deps:jessie
+  environment:
+    GOPATH: /sd/workspace
+
+jobs:
+  main:
+    steps:
+    - setup: |
+        wget -O /usr/local/bin/mplater https://github.com/FenrirUnbound/mplater/releases/download/v0.0.2/mplater
+        chmod +x /usr/local/bin/mplater
+    - create_spec: mplater -i ./master.tmpl -o ./master.yaml -x tagName=someTag -x portNumber=6379
