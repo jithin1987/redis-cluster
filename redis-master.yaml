@@ -1,0 +1,81 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sd-redis-master
+  labels:
+    name: redis-master
+    app: sd-redis
+spec:
+  ports:
+  - port: 6379
+    name: master
+  clusterIP: None
+  selector:
+    name: redis-master
+---
+apiVersion: apps/v1beta1
+kind: StatefulSet
+metadata:
+  name: redis-master
+spec:
+  serviceName: "sd-redis-master"
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: sd-redis
+        name: redis-master
+        role: master
+      name: redis-master
+    spec:
+      initContainers:
+        - name: config-setter
+          image: busybox
+          env:
+            - name: REDIS_MASTER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-secret
+                  key: password
+          command: [
+            'sh', '-c',
+            'cp /redis-config-template/redis-master.conf /redis-conf/; sed -i "s/%master-password%/${REDIS_MASTER_PASSWORD}/" /redis-conf/redis-master.conf'
+            ]
+          volumeMounts:
+            - mountPath: /redis-config-template
+              name: redis-config-map
+            - mountPath: /redis-conf
+              name: redis-conf
+      containers:
+        - name: master
+          image: redis:4
+          command: [
+            'sh', '-c',
+            'redis-server /redis-conf/redis-master.conf --protected-mode no'
+            ]
+          ports:
+            - containerPort: 6379
+              name: master
+          volumeMounts:
+            - mountPath: /redis-master-data
+              name: redis-data
+              subPath: master
+            - mountPath: /redis-conf
+              name: redis-conf
+      volumes:
+        - name: redis-config-map
+          configMap:
+            name: sd-redis-master-conf
+        - name: redis-conf
+          emptyDir: {}
+  volumeClaimTemplates:
+    - metadata:
+        name: redis-data
+        annotations:
+          volume.beta.kubernetes.io/storage-class: basic
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 10Gi
